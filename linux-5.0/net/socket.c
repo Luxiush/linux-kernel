@@ -1273,7 +1273,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	/* Now protected by module ref count */
 	rcu_read_unlock();
 
-	err = pf->create(net, sock, protocol, kern);
+	err = pf->create(net, sock, protocol, kern); /**PF_INET: net/ipv4/af_inet.c::inet_create**/
 	if (err < 0)
 		goto out_module_put;
 
@@ -1343,13 +1343,14 @@ int __sys_socket(int family, int type, int protocol)
 	if (SOCK_NONBLOCK != O_NONBLOCK && (flags & SOCK_NONBLOCK))
 		flags = (flags & ~SOCK_NONBLOCK) | O_NONBLOCK;
 
-	retval = sock_create(family, type, protocol, &sock);
+	retval = sock_create(family, type, protocol, &sock); // 根据family参数选择具体的协议模块(如inet)创建socket
 	if (retval < 0)
 		return retval;
 
-	return sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
+	return sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK)); // 为socket分配一个文件描述符, 并记录到当前进程的fd数组中
 }
 
+// int socket(int family, int type, int protocol) // 
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
 	return __sys_socket(family, type, protocol);
@@ -1464,14 +1465,14 @@ SYSCALL_DEFINE4(socketpair, int, family, int, type, int, protocol,
  *	We move the socket address to kernel space before we call
  *	the protocol layer (having also checked the address is ok).
  */
-
+// 把地址绑定到指定的socket
 int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 {
 	struct socket *sock;
 	struct sockaddr_storage address;
 	int err, fput_needed;
 
-	sock = sockfd_lookup_light(fd, &err, &fput_needed);
+	sock = sockfd_lookup_light(fd, &err, &fput_needed); // 
 	if (sock) {
 		err = move_addr_to_kernel(umyaddr, addrlen, &address);
 		if (!err) {
@@ -1479,7 +1480,7 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 						   (struct sockaddr *)&address,
 						   addrlen);
 			if (!err)
-				err = sock->ops->bind(sock,
+				err = sock->ops->bind(sock, // ??
 						      (struct sockaddr *)
 						      &address, addrlen);
 		}
@@ -1488,6 +1489,7 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 	return err;
 }
 
+// int bind(int fd, struct sockaddr* umyaddr, int addrlen) // 
 SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 {
 	return __sys_bind(fd, umyaddr, addrlen);
@@ -1556,7 +1558,7 @@ int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
 		goto out;
 
 	err = -ENFILE;
-	newsock = sock_alloc();
+	newsock = sock_alloc(); //
 	if (!newsock)
 		goto out_put;
 
@@ -1586,7 +1588,7 @@ int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
 	if (err)
 		goto out_fd;
 
-	err = sock->ops->accept(sock, newsock, sock->file->f_flags, false);
+	err = sock->ops->accept(sock, newsock, sock->file->f_flags, false); //
 	if (err < 0)
 		goto out_fd;
 
@@ -1605,7 +1607,7 @@ int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
 
 	/* File flags are not inherited via accept() unlike another OSes. */
 
-	fd_install(newfd, newfile);
+	fd_install(newfd, newfile); //
 	err = newfd;
 
 out_put:
@@ -2668,7 +2670,7 @@ int sock_register(const struct net_proto_family *ops)
 				      lockdep_is_held(&net_family_lock)))
 		err = -EEXIST;
 	else {
-		rcu_assign_pointer(net_families[ops->family], ops);
+		rcu_assign_pointer(net_families[ops->family], ops); // 协议注册
 		err = 0;
 	}
 	spin_unlock(&net_family_lock);
