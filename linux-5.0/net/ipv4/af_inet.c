@@ -244,6 +244,7 @@ EXPORT_SYMBOL(inet_listen);
  *	Create an inet socket.
  */
 
+// include/net/net_namespace.h::struct net
 static int inet_create(struct net *net, struct socket *sock, int protocol,
 		       int kern)
 {
@@ -310,8 +311,8 @@ lookup_protocol:
 	    !ns_capable(net->user_ns, CAP_NET_RAW))
 		goto out_rcu_unlock;
 
-	sock->ops = answer->ops;
-	answer_prot = answer->prot;
+	sock->ops = answer->ops; /**net/ipv4/af_inet.c:inet_stream_ops **/
+	answer_prot = answer->prot; /**net/ipv4/tcp_ipv4.c:tcp_prot**/
 	answer_flags = answer->flags;
 	rcu_read_unlock();
 
@@ -319,6 +320,8 @@ lookup_protocol:
 
 	err = -ENOBUFS;
 	sk = sk_alloc(net, PF_INET, GFP_KERNEL, answer_prot, kern);
+	/**sk->sk_prot = sk->sk_prot_creator = answer_prot;**/
+
 	if (!sk)
 		goto out;
 
@@ -326,7 +329,7 @@ lookup_protocol:
 	if (INET_PROTOSW_REUSE & answer_flags)
 		sk->sk_reuse = SK_CAN_REUSE;
 
-	inet = inet_sk(sk);
+	inet = inet_sk(sk); // sk_alloc的时候分配的内存大小是sizeof(struct tcp_sock), 而tcp_sock继承自sock所以这里直接进行指针类型的转换即可
 	inet->is_icsk = (INET_PROTOSW_ICSK & answer_flags) != 0;
 
 	inet->nodefrag = 0;
@@ -344,7 +347,7 @@ lookup_protocol:
 
 	inet->inet_id = 0;
 
-	sock_init_data(sock, sk);
+	sock_init_data(sock, sk); // net/core/sock.c::sock_init_data
 
 	sk->sk_destruct	   = inet_sock_destruct;
 	sk->sk_protocol	   = protocol;
@@ -376,7 +379,7 @@ lookup_protocol:
 	}
 
 	if (sk->sk_prot->init) {
-		err = sk->sk_prot->init(sk);
+		err = sk->sk_prot->init(sk); // net/ipv4/tcp_ipv4.c:tcp_v4_init_sock
 		if (err) {
 			sk_common_release(sk);
 			goto out;
@@ -454,6 +457,7 @@ int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 }
 EXPORT_SYMBOL(inet_bind);
 
+// 给socket绑定ip和端口号
 int __inet_bind(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 		bool force_bind_address_no_port, bool with_lock)
 {
@@ -476,7 +480,7 @@ int __inet_bind(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 	}
 
 	tb_id = l3mdev_fib_table_by_index(net, sk->sk_bound_dev_if) ? : tb_id;
-	chk_addr_ret = inet_addr_type_table(net, addr->sin_addr.s_addr, tb_id);
+	chk_addr_ret = inet_addr_type_table(net, addr->sin_addr.s_addr, tb_id); // IP地址
 
 	/* Not specified by any standard per-se, however it breaks too
 	 * many applications when removed.  It is unfortunate since
@@ -493,7 +497,7 @@ int __inet_bind(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 	    chk_addr_ret != RTN_BROADCAST)
 		goto out;
 
-	snum = ntohs(addr->sin_port);
+	snum = ntohs(addr->sin_port); // 端口号
 	err = -EACCES;
 	if (snum && snum < inet_prot_sock(net) &&
 	    !ns_capable(net->user_ns, CAP_NET_BIND_SERVICE))

@@ -73,3 +73,67 @@ struct file *sock_alloc_file(struct socket *sock, int flags, const char *dname)
     return file;
 }
 ```
+
+#### socket create (INET层)
+- INET层主要完成`sock`结构体的初始化.
+
+```c
+// include/net/sock.h
+struct sockt_common {
+    // ...
+    struct proto* skc_prot;
+    // ...
+};
+
+// include/net/sock.h
+struct sock {
+    struct sock_common  `__sk_common`;
+#define sk_prot         `__sk_common.skc_pro` // 用于操作`sock`的一些接口.
+    // ...
+    struct socket*      sk_socket;
+    struct proto*       sk_prot_creator;
+    // ...
+};
+
+// include/net/inet_sock
+struct inet_sock {
+    struct sockt sk;  // 相当于继承了`struct sock`, 到时候直接通过强制类型转换来访问
+#if IS_ENABLED(CONFIG_IPV6)
+    struct ipv6_pinfo* pinet6;
+#endif
+    // ...
+};
+```
+
+```c
+// net/ipv4/af_inet.c
+static int inet_create(struct net *net, struct socket *sock, int protocol, int kern)
+{
+    struct sock* sk;
+    struct inet_protosw answer;
+    // ...
+    // 通过一个inet_protosw结构体的链表(inetsw)维护协议的注册信息, 需要创建socket的时候就从inetsw中根据type和protocol进行查找.
+    list_for_each_entry_rcu(answer, &inetsw[sock->type], list) {
+        if (protocol == answer->protocol) {
+            if (protocol != IPPROTO_IP)
+                break;
+        }
+        else {
+            // ...
+        }
+    }
+    // ...
+    sk = sk_alloc(net, PF_INET, GFP_KERNEL, answer->prot, kern); 给sock分配内存
+    // ...
+    struct inet_sock* inet;
+    inet = inet_sk(sk);
+    // ... // inet_sock结构体的初始化
+    // ...
+    sock_init_data(sock, sk); // sock结构体的初始化, 和上层的socket结构体进行绑定.
+    // ...
+    err = sk->sk_prot->hash(sk);
+    // ...
+    err = sk->sk_prot->init(sk); // 调用具体的协议模块对socket进行初始化.
+    // ...
+}
+```
