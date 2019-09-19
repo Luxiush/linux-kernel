@@ -137,3 +137,33 @@ static int inet_create(struct net *net, struct socket *sock, int protocol, int k
     // ...
 }
 ```
+
+#### socket create (TCP层)
+```c
+// include/net/inet_connection_sock.h
+struct inet_connection_sock {
+    struct inet_sock icsk_inet; // 继承`struct inet_sock`
+    // ...
+};
+
+// include/linux/tcp.h
+struct tcp_sock {
+    struct inet_connection_sock inet_conn; // 继承`inet_connection_sock`
+};
+```
+
+```c
+// net/ipv4/tcp_ipv.c
+static int tcp_v4_init_sock(struct sock *sk)
+{
+    // ...
+    tcp_init_sock(sk);
+    // ...
+}
+
+// net/ipv4/tcp.c
+void tcp_init_sock(struct sock *sk)
+{
+    // TODO
+}
+```
