@@ -1,0 +1,101 @@
+#!/bin/bash
+
+function update_initramfs()
+{
+	if [ $# -ne 2 ]; then
+		echo "Usage: update_initramfs dir_in file_out"
+	else
+		file_out=$2
+		format=${file_out##*.}
+
+		_cmd="!"
+		if [ $format = "cpio" ]; then
+			_cmd="find $1 -print0 | cpio --null -ov --format=newc > $2"
+
+		elif [ $format = "gz" ]; then
+			_cmd="find $1 -print0 | cpio --null -ov --format=newc | gzip -9 > $2"
+
+		else
+			echo "Unknown extention: $format"
+		fi
+
+		echo $_cmd
+		sleep 2
+		$_cmd
+	fi
+}
+
+function _ensure_params()
+{
+	base=`pwd`
+	if [ "!$1"="!-u" ]; then
+		unset diskImage
+		unset kernelImage
+		unset kernelParam
+		unset initramfsCpio
+		unset initramfsCpioGz
+        unset initrd
+	fi
+
+	if [ -z $diskImage ]; then
+		echo "Searching for 'disk.img'"
+		export diskImage=$base/$(find qemu/ -name "disk.img")
+	fi
+	if [ -z $kernelImage ]; then
+		echo "Searching for 'bzImage'"
+		export kernelImage=$base/$(find build/ -regex ".*x86_64.*bzImage")
+	fi
+	if [ -z "$kernelParam" ]; then
+		export kernelParam="root=/dev/sda console=ttyS0"
+	fi
+	if [ -z $initramfsCpio ]; then
+		echo "Searching for 'initramfs.cpio'"
+		export initramfsCpio=$base/$(find busybox/ -name "initramfs.cpio")
+	fi
+	if [ -z $initramfsCpioGz ]; then
+		echo "Searching for 'initramfs.cpio.gz'"
+		export initramfsCpioGz=$base/$(find busybox/ -name "initramfs.cpio.gz")
+	fi
+    if [ -z $initrd ]; then
+        echo "Searching for 'initrd'"
+        export initrd=$base/$(find busybox/ -name "initrd")
+    fi
+
+    cat << EOF
+params:
+    diskImage=$diskImage;
+    kernelImage=$kernelImage;
+    initramfsCpio=$initramfsCpio;
+    initramfsCpioGz=$initramfsCpioGz;
+    initrd=$initrd
+    kernelParam="$kernelParam"
+EOF
+}
+
+function start_qemu0()
+{
+	_ensure_params
+
+	qemu-system-x86_64 -nographic -hda $diskImage -kernel $kernelImage -initrd $initramfsCpio -append "$kernelParam" -s $*
+}
+
+function start_qemu()
+{
+	if [ $# -lt 2 ]; then
+		echo "Usage: start_qemu [kernel image] [initrd]"
+		return -1
+	fi
+
+	_KERNELIMG=$1
+	_INITRD=$2
+	_APPEND="console=ttyS0"
+
+	shift 2
+	_cmd="qemu-system-x86_64 -nographic -kernel $_KERNELIMG -initrd $_INITRD -append \"$_APPEND\" -s $*"
+
+	echo $_cmd
+	sleep 2
+	$_cmd
+
+	return $?
+}
