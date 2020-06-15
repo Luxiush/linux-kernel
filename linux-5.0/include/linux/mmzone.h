@@ -94,7 +94,7 @@ extern int page_group_by_mobility_disabled;
 			PB_migrate_end, MIGRATETYPE_MASK)
 
 struct free_area {
-	struct list_head	free_list[MIGRATE_TYPES];
+	struct list_head	free_list[MIGRATE_TYPES]; /* page.lru组成的链表 */
 	unsigned long		nr_free;
 };
 
@@ -632,7 +632,7 @@ extern struct page *mem_map;
 struct bootmem_data;
 typedef struct pglist_data {
 	struct zone node_zones[MAX_NR_ZONES];
-	struct zonelist node_zonelists[MAX_ZONELISTS];
+	struct zonelist node_zonelists[MAX_ZONELISTS];	/* 每个zonelist规定一种分配策略 */
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
 	struct page *node_mem_map;

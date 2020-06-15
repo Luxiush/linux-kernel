@@ -1998,7 +1998,7 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 		list_del(&page->lru);
 		rmv_page_order(page);
 		area->nr_free--;
-		expand(zone, page, order, current_order, area, migratetype);
+		expand(zone, page, order, current_order, area, migratetype); /* 把没分配出去的page重新记录到free_area中 */
 		set_pcppage_migratetype(page, migratetype);
 		return page;
 	}
@@ -2139,6 +2139,10 @@ static void change_pageblock_range(struct page *pageblock_page,
  * as fragmentation caused by those allocations polluting movable pageblocks
  * is worse than movable allocations stealing from unmovable and reclaimable
  * pageblocks.
+ * 与其让一个不可移动的页面去污染一个可移动的pageblock,
+ * 还不如让一个可移动的页面去污染一个不可移动的pageblock.
+ * 因为可移动页面在必要的时候可以移到其他地方, 不太可能导致不可移动pageblock的
+ * 永久碎片化.
  */
 static bool can_steal_fallback(unsigned int order, int start_mt)
 {
@@ -2539,7 +2543,7 @@ retry:
 
 		if (!page && __rmqueue_fallback(zone, order, migratetype,
 								alloc_flags))
-			goto retry;
+			goto retry; /* 如果当前migratetype无法满足分配请求, 则尝试从其他的migratetype'偷'一些空闲页面过来. */
 	}
 
 	trace_mm_page_alloc_zone_locked(page, order, migratetype);
@@ -6571,15 +6575,15 @@ static void __init free_area_init_core(struct pglist_data *pgdat)
 		 * when the bootmem allocator frees pages into the buddy system.
 		 * And all highmem pages will be managed by the buddy system.
 		 */
-		zone_init_internals(zone, j, nid, freesize);
+		zone_init_internals(zone, j, nid, freesize); /* 初始化zone结构 */
 
 		if (!size)
 			continue;
 
 		set_pageblock_order();
-		setup_usemap(pgdat, zone, zone_start_pfn, size);
+		setup_usemap(pgdat, zone, zone_start_pfn, size); /* usemap(zone->pageblock_flags): 记录页面的使用情况 */
 		init_currently_empty_zone(zone, zone_start_pfn, size);
-		memmap_init(size, nid, j, zone_start_pfn);
+		memmap_init(size, nid, j, zone_start_pfn); /* 初始化zone里的所有page */
 	}
 }
 
@@ -6665,7 +6669,7 @@ void __init free_area_init_node(int nid, unsigned long *zones_size,
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn,
 				  zones_size, zholes_size);
 
-	alloc_node_mem_map(pgdat);
+	alloc_node_mem_map(pgdat); /* 给pgdat->node_mem_map分配内存 */
 	pgdat_set_deferred_range(pgdat);
 
 	free_area_init_core(pgdat);

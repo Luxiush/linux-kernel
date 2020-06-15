@@ -553,7 +553,7 @@ asmlinkage __visible void __init start_kernel(void)
 	 * enable them.
 	 */
 	boot_cpu_init();
-	page_address_init();
+	page_address_init(); /* 只是初始化了一个哈希表, 用于Page到HighMem的映射 */
 	pr_notice("%s", linux_banner);
 	setup_arch(&command_line);
 	/*
