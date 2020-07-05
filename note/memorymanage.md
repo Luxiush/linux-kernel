@@ -70,6 +70,12 @@ linux把访问时间相同的存储空间看做一个`存储节点`(Node).
 typedef struct pglist_data {
     struct zone node_zones[MAX_NR_ZONES];
     // ...
+    wait_queue_head_t kswapd_wait;
+    struct task_struct* kswapd;
+    // ...
+    wait_queue_head_t kcompactd_wait;
+    struct task_struct* kcompactd;
+    // ...
 } pg_data_t;
 
 
@@ -176,18 +182,6 @@ void __init free_area_init_node(int nid, unsigned long* zones_size,
 一个页面大小通常为4K(2^12)
 
 - 零页(`struct boot_params`), 存放内核的启动参数.
-
-- watermark 水位, 记录当前内存的剩余量.
-
-high
- 当剩余内存在high以上时，系统认为当前内存使用压力不大。
-low
- 当剩余内存降低到low时，系统就认为内存已经不足了，会触发kswapd内核线程进行内存回收处理
-min
- 当剩余内存在min以下时，则系统内存压力非常大。一般情况下min以下的内存是不会被分配的，min以下的内存默认是保留给特殊用途使用，属于保留的页框，用于原子的内存请求操作。
-比如：当我们在中断上下文申请或者在不允许睡眠的地方申请内存时，可以采用标志GFP_ATOMIC来分配内存，此时才会允许我们使用保留在min水位以下的内存。
-<https://blog.csdn.net/rikeyone/article/details/85037249>
-
 
 
 #### 页面的申请
@@ -387,5 +381,55 @@ out:
 
 ```
 
+
+### 页面的回收 (reclaim)
+内存不足的时候回收一些已经分配出去的页面, 把一些页面`换出`
+
+内核线程: kswapd
+
+- watermark 水位, 记录当前内存的剩余量.
+
+high
+ 当剩余内存在high以上时，系统认为当前内存使用压力不大。
+low
+ 当剩余内存降低到low时，系统就认为内存已经不足了，会触发kswapd内核线程进行内存回收处理
+min
+ 当剩余内存在min以下时，则系统内存压力非常大。一般情况下min以下的内存是不会被分配的，min以下的内存默认是保留给特殊用途使用，属于保留的页框，用于原子的内存请求操作。
+比如：当我们在中断上下文申请或者在不允许睡眠的地方申请内存时，可以采用标志GFP_ATOMIC来分配内存，此时才会允许我们使用保留在min水位以下的内存。
+<https://blog.csdn.net/rikeyone/article/details/85037249>
+
+
+```c
+/*
+__alloc_pages_slowpath
+    -> __alloc_pages_direct_reclaim                 // 页面回收, 把页面'换出', 写到磁盘上
+        -> __perform_reclaim
+            -> try_to_free_pages
+                -> do_try_to_free_pages
+                    -> shrink_zones
+                        -> shrink_node
+                            -> shrink_active_list
+                                -> mem_cgroup_uncharge_list
+
+    -> __alloc_pages_direct_compact                 // 页面的压缩, 把空闲的页面移到一起
+        -> __try_to_compact_pages
+            -> compact_zone_order
+                -> compact_zone
+                    -> isolate_migratepages        // 收集可以迁移的页面
+                    -> migrate_pages
+                        -> unmap_and_move
+                            -> __unmap_and_move
+                                -> try_to_unmap     // 释放页表中的映射
+                                -> move_to_new_page // 页面迁移, 在page->mapping中会有一个回调函数(ops->migratepage)专门用来迁移页面.
+*/
+```
+
+### 页面的压缩 (compaction)
+防止碎片化
+内核线程: kcompactd
+
+把空闲的页面移到一起
+
+页面迁移: Documentation/vm/page_migration.rst
 
 .

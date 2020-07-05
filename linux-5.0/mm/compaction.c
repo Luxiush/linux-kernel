@@ -1281,7 +1281,7 @@ static isolate_migrate_t isolate_migratepages(struct zone *zone,
 			continue;
 
 		/* Perform the isolation */
-		low_pfn = isolate_migratepages_block(cc, low_pfn,
+		low_pfn = isolate_migratepages_block(cc, low_pfn, /* 将页面从LRU列表中移除, 添加到cc->migratepages中 */
 						block_end_pfn, isolate_mode);
 
 		if (!low_pfn || cc->contended)
@@ -1594,7 +1594,7 @@ static enum compact_result compact_zone(struct zone *zone, struct compact_contro
 	while ((ret = compact_finished(zone, cc)) == COMPACT_CONTINUE) {
 		int err;
 
-		switch (isolate_migratepages(zone, cc)) {
+		switch (isolate_migratepages(zone, cc)) { /* 将页面从LRU列表中移除, 收集到cc->migratepages中 */
 		case ISOLATE_ABORT:
 			ret = COMPACT_CONTENDED;
 			putback_movable_pages(&cc->migratepages);
@@ -1611,7 +1611,7 @@ static enum compact_result compact_zone(struct zone *zone, struct compact_contro
 			;
 		}
 
-		err = migrate_pages(&cc->migratepages, compaction_alloc,
+		err = migrate_pages(&cc->migratepages, compaction_alloc, /* 页面迁移 */
 				compaction_free, (unsigned long)cc, cc->mode,
 				MR_COMPACTION);
 
