@@ -42,6 +42,7 @@ make O=./build # 指定输出路径
 - <https://blog.0x972.info/?d=2014/11/27/18/45/48-linux-kernel-system-debugging-part-1-system-setup>
 
 - [关于initramfs]( https://wiki.gentoo.org/wiki/Custom_Initramfs )
+- `Documentation/filesystems/ramfs-rootfs-initramfs.txt`
 - 关于`initrd`: `Documentation/admin-guide/init*`
 
 
@@ -67,14 +68,14 @@ $ sudo cp -va /dev/{null,console,tty} dev/
 $ cp -r ../busybox-$BVERSION/_install/* .
 
 # 启动内核时没有指定init参数时会默认尝试加载'/init'文件:
-$ cat > /init <<INITEND
+$ cat > ./init <<INITEND
 #!/bin/sh
 /bin/mount -t proc none /proc
 exec /sbin/init
 INITEND
 
 # 打包initramfs
-$ find . -print0 | cpio --null -ov --format=newc > ../initramfs.cpio
+$ find . -print0 | cpio --null -ov --format=newc > ../initramfs.cpio # 一定要先cd到initramfs所在目录 !!!!
 ```
 
 ---

@@ -5,15 +5,18 @@ function update_initramfs()
 	if [ $# -ne 2 ]; then
 		echo "Usage: update_initramfs dir_in file_out"
 	else
-		file_out=$2
+		dir_in="$1"
+		file_out="`pwd`/$2"
 		format=${file_out##*.}
+
+		cd $dir_in # 一定要先cd到目标目录, 切记切记!!!!!
 
 		_cmd="!"
 		if [ $format = "cpio" ]; then
-			_cmd="find $1 -print0 | cpio --null -ov --format=newc > $2"
+			_cmd="find . -print0 | cpio --null -ov --format=newc > $file_out"
 
 		elif [ $format = "gz" ]; then
-			_cmd="find $1 -print0 | cpio --null -ov --format=newc | gzip -9 > $2"
+			_cmd="find . -print0 | cpio --null -ov --format=newc | gzip -9 > $file_out"
 
 		else
 			echo "Unknown extention: $format"
@@ -21,20 +24,23 @@ function update_initramfs()
 
 		echo $_cmd
 		sleep 2
-		$_cmd
+		eval $_cmd # run with `eval` because of error: `find: paths must precede expression`
+
+		cd -
 	fi
 }
 
 function _ensure_params()
 {
 	base=`pwd`
-	if [ "!$1"="!-u" ]; then
+
+	if [[ "_$1"="_-u" ]]; then
 		unset diskImage
 		unset kernelImage
 		unset kernelParam
 		unset initramfsCpio
 		unset initramfsCpioGz
-        unset initrd
+		unset initrd
 	fi
 
 	if [ -z $diskImage ]; then
@@ -76,7 +82,10 @@ function start_qemu0()
 {
 	_ensure_params
 
-	qemu-system-x86_64 -nographic -hda $diskImage -kernel $kernelImage -initrd $initramfsCpio -append "$kernelParam" -s $*
+	_cmd="qemu-system-x86_64 -nographic -hda $diskImage -kernel $kernelImage -initrd $initramfsCpio -append \"$kernelParam\" -s $*"
+	echo $_cmd
+	sleep 2
+	$_cmd
 }
 
 function start_qemu()
@@ -91,6 +100,7 @@ function start_qemu()
 	_APPEND="console=ttyS0"
 
 	shift 2
+	# 无硬盘启动
 	_cmd="qemu-system-x86_64 -nographic -kernel $_KERNELIMG -initrd $_INITRD -append \"$_APPEND\" -s $*"
 
 	echo $_cmd
