@@ -1,20 +1,14 @@
 ## 系统调用
 
-### 内核与shell
-![](./img/linux_sys_arch.jpg)
-- 内核对外提供了一套系统调用接口(System Call Interface)
-> SCI 实际上是一个非常有用的函数调用多路复用和多路分解服务。<https://www.ibm.com/developerworks/cn/linux/l-linux-kernel/>
-
-- 参考: Documentation/process/adding-syscalls.rst
-- 用户空间和内核提供的服务之间的一个接口. 由于服务在内核中提供, 用户程序无法直接调用, 因此需要一个进程来`跨越用户空间与内核空间的界限`.
-
-- 用户程序通过中断向内核发请求.
-
 ### 用户应用程序调用系统调用的方式:
 
 1. 通过glibc库封装的函数(`/usr/include/unistd.h`)
 2. `syscall()`和相应的系统调用号(`/usr/include/sys/syscall.h`)
-3. `int`汇编指令
+3. `i386`通过`int`汇编指令来执行系统调用, 而`x86_64`则有专门的`syscall`指令.
+
+`int 0x8`和`syscall`指令本身不会去改栈顶指针(RSP).
+执行系统调用的时候用户空间的堆栈没变, 只是把cpu的寄存器上下文切换到内核状态, 系统调用在内核栈执行, 执行完再把上下文切回用户状态.
+从用户的角度来看, 其实内核也就相当于一个进程, 为用户进程提供各种服务.
 
 ### `int`指令
 - `interrupt`, 软件中断
@@ -24,14 +18,38 @@
 
 - linux下, `int 0x8`的处理函数为`系统调用`的总入口.
 
-### 参数传递 & 返回值
-`system_call` 所有系统调用的总入口
+```
+// tools/testing/selftests/rcutorture/bin/nolibc.h
+#define my_syscall1(num, arg1)                      \
+({                                                  \
+    long _ret;                                      \
+    register long _num asm("eax") = (num);          \
+    register long _arg1 asm("ebx") = (long)(arg1);  \
+    asm volatile (                                  \
+        "int $0x80\n"                               \
+        : "=a"(_ret)                                \
+        : "r"(_arg1),                               \
+          "0"(_num)                                 \
+        : "memory", "cc"                            \
+    );                                              \
+    _ret;                                           \
+})
 
-系统调用中断`int 0x80`, 中断处理函数`system_call`.
-通过`eax`寄存器传系统调用号, 通过寄存器传递参数
-在`sys_call_table`查找相应的处理函数
-执行对应的处理函数
-`ret_from_sys_call`
+static __attribute__((unused))
+int sys_chdir(const char *path)
+{
+    return my_syscall1(__NR_chdir, path);
+}
+```
+
+### 参数传递 & 返回值
+
+系统调用中断`int 0x80`, 中断处理函数`entry_INT80_32`;
+通过`eax`寄存器传系统调用号, 通过寄存器传递参数;
+在`sys_call_table`查找相应的处理函数;
+执行对应的处理函数;
+`ret_from_sys_call`;
+通常, 系统调用的返回值也放在`eax`寄存器中;
 
 - 系统调用的声明: `include/linux/syscalls.h`
 - 系统调用号的定义: `include/uapi/asm-generic/unistd.h` (通用的)
